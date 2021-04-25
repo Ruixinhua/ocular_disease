@@ -1,5 +1,5 @@
 {
-    "name": "test",
+    "name": "pretrained",
     "n_gpu": 1,
 
     "arch": {
@@ -15,7 +15,7 @@
             "dataset_path": "dataset/train_aug/",
             "img_size": 224,
             "down_sampling": false,
-            "batch_size": 32,
+            "batch_size": 64,
             "shuffle": true,
             "num_workers": 0
         }
@@ -23,7 +23,7 @@
     "optimizer": {
         "type": "Adam",
         "args":{
-            "lr": 1e-3,
+            "lr": 1e-4,
             "weight_decay": 0,
             "amsgrad": true
         }
@@ -47,7 +47,7 @@
         "verbosity": 2,
         
         "monitor": "max val_auc",
-        "early_stop": 5,
+        "early_stop": 30,
 
         "tensorboard": true
     }
