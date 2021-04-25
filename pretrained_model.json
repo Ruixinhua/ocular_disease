@@ -1,0 +1,54 @@
+{
+    "name": "ocular_classification",
+    "n_gpu": 1,
+
+    "arch": {
+        "type": "Resnet",
+        "args": {
+        }
+    },
+    "data_loader": {
+        "type": "OcularDataloader",
+        "args":{
+            "full_df_path": "dataset/full_df.csv",
+            "dataset_path": "dataset/preprocessed_images/",
+            "img_size": 512,
+            "apply_balance": true,
+            "batch_size": 32,
+            "shuffle": true,
+            "validation_split": 0.2,
+            "num_workers": 0
+        }
+    },
+    "optimizer": {
+        "type": "Adam",
+        "args":{
+            "lr": 1e-3,
+            "weight_decay": 0,
+            "amsgrad": true
+        }
+    },
+    "loss": "cross_loss",
+    "metrics": [
+        "auc", "accuracy"
+    ],
+    "lr_scheduler": {
+        "type": "StepLR",
+        "args": {
+            "step_size": 50,
+            "gamma": 0.9
+        }
+    },
+    "trainer": {
+        "epochs": 100,
+
+        "save_dir": "saved/",
+        "save_period": 10,
+        "verbosity": 2,
+        
+        "monitor": "max val_auc",
+        "early_stop": 10,
+
+        "tensorboard": true
+    }
+}
