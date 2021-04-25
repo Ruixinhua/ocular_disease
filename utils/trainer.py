@@ -13,10 +13,10 @@ class Trainer(BaseTrainer):
     Trainer class
     """
 
-    def __init__(self, model, criterion, metric_ftns, optimizer, config, device,
-                 data_loader, valid_data_loader=None, lr_scheduler=None, len_epoch=None):
+    def __init__(self, model, criterion, metric_ftns, optimizer, config, device, data_loader,
+                 valid_data_loader=None, lr_scheduler=None, len_epoch=None, add_histogram=False):
         super().__init__(model, criterion, metric_ftns, optimizer, config)
-        self.config = config
+        self.config = config.config
         self.device = device
         self.data_loader = data_loader
         if len_epoch is None:
@@ -28,6 +28,7 @@ class Trainer(BaseTrainer):
             self.len_epoch = len_epoch
         self.valid_data_loader = valid_data_loader
         self.do_validation = self.valid_data_loader is not None
+        self.add_histogram = add_histogram
         self.lr_scheduler = lr_scheduler
         self.log_step = int(np.sqrt(data_loader.batch_size))
 
@@ -43,45 +44,45 @@ class Trainer(BaseTrainer):
         self.model.train()
         self.train_metrics.reset()
         bar = tqdm(enumerate(self.data_loader), total=len(self.data_loader))
-        for batch_idx, batch_data in bar:
-            data, target, _ = batch_data
+        # collect all the outputs and targets for evaluation
+        outputs, targets = [], []
+        for batch_idx, (data, target) in bar:
+            # load data and target to device
             data, target = data.to(self.device), target.to(self.device)
-
             self.optimizer.zero_grad()
-            arch_type = self.config['arch']['type']
-            if arch_type in ["VanillaVAE", "ResNet_VAE"]:
-                recon, z, mu, log_var = self.model(data)
-                loss = self.criterion(recon, data, mu, log_var)
-            elif arch_type == "VQVAE":
-                recon, z, vq_loss = self.model(data)
-                loss = self.criterion(recon, data, vq_loss)
+            # get output from model
+            if self.config["name"] == "VAE":
+                output, z, mu, log_var = self.model(data)
+                loss = self.criterion(output, data, mu, log_var)
             else:
                 output = self.model(data)
                 loss = self.criterion(output, target)
             loss.backward()
             self.optimizer.step()
 
+            # extend outputs and targets
+            outputs.extend(output.detach().cpu().tolist())
+            targets.extend(target.detach().cpu().tolist())
+            # writer training information to
             self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx)
             self.train_metrics.update('loss', loss.item())
-            # for met in self.metric_ftns:
-            #     self.train_metrics.update(met.__name__, met(output, target))
 
             if batch_idx % self.log_step == 0:
-                bar.set_description(f"Train Epoch: {epoch} Loss: {loss.item()}")
-                # self.logger.debug('Train Epoch: {} {} Loss: {:.6f}'.format(
-                #     epoch,
-                #     self._progress(batch_idx),
-                #     loss.item()))
-                self.writer.add_image('input', make_grid(data.cpu(), nrow=8, normalize=True))
-                if arch_type in ["VanillaVAE", "ResNet_VAE", "VQVAE"]:
-                    self.writer.add_image('recon', make_grid(recon.cpu(), nrow=8, normalize=True))
+                bar.set_description(f"Train Epoch: {epoch} Loss: {round(loss.item(), 4)}")
+                if self.config["name"] == "VAE":
+                    # add original and reconstructed images to tensorboard
+                    self.writer.add_image('train_origin', make_grid(data.cpu(), nrow=8, normalize=True))
+                    self.writer.add_image('train_recons', make_grid(output.cpu(), nrow=8, normalize=True))
+
             if batch_idx == self.len_epoch:
                 break
+        # do evaluation on training dataset with the metric functions defined
+        for met in self.metric_ftns:
+            self.train_metrics.update(met.__name__, met(outputs, targets))
         log = self.train_metrics.result()
-
         if self.do_validation:
             val_log = self._valid_epoch(epoch)
-            log.update(**{'val_' + k: v for k, v in val_log.items()})
+            log.update(**{'val_' + k: round(v, 4) for k, v in val_log.items()})
 
         if self.lr_scheduler is not None:
             self.lr_scheduler.step()
@@ -95,34 +96,32 @@ class Trainer(BaseTrainer):
         """
         self.model.eval()
         self.valid_metrics.reset()
+        outputs, targets = [], []
         with torch.no_grad():
-            for batch_idx, batch_dict in tqdm(enumerate(self.valid_data_loader), total=len(self.valid_data_loader)):
-                data, target = batch_dict['data'], batch_dict['target']
+            for batch_idx, (data, target) in tqdm(enumerate(self.valid_data_loader), total=len(self.valid_data_loader)):
                 data, target = data.to(self.device), target.to(self.device)
-
-                if self.config['arch']['type'] == 'DistilBertForSequenceClassification':
-                    output = self.model(data, batch_dict['mask'].to(self.device))
+                if self.config["name"] == "VAE":
+                    output, z, mu, log_var = self.model(data)
+                    loss = self.criterion(output, data, mu, log_var)
                 else:
                     output = self.model(data)
-                loss = self.criterion(output, target)
-
+                    loss = self.criterion(output, target)
+                # extend outputs and targets
+                outputs.extend(output.cpu().tolist())
+                targets.extend(target.cpu().tolist())
                 self.writer.set_step((epoch - 1) * len(self.valid_data_loader) + batch_idx, 'valid')
-                self.valid_metrics.update('loss', loss.item())
-                for met in self.metric_ftns:
-                    self.valid_metrics.update(met.__name__, met(output, target))
-                # self.writer.add_image('input', make_grid(data.cpu(), nrow=8, normalize=True))
-
+                self.valid_metrics.update('loss', round(loss.item(), 4))
+            # add original and reconstructed images to tensorboard
+            if self.config["name"] == "VAE":
+                self.writer.add_image('valid_origin', make_grid(data.cpu(), nrow=8, normalize=True))
+                self.writer.add_image('valid_recons', make_grid(output.cpu(), nrow=8, normalize=True))
+            for met in self.metric_ftns:
+                self.valid_metrics.update(met.__name__, met(outputs, targets))
+        from sklearn.metrics import confusion_matrix
+        pred = np.argmax(outputs, axis=1)
+        self.matrix = confusion_matrix(targets, pred)
         # add histogram of model parameters to the tensorboard
-        for name, p in self.model.named_parameters():
-            self.writer.add_histogram(name, p, bins='auto')
+        if self.add_histogram:
+            for name, p in self.model.named_parameters():
+                self.writer.add_histogram(name, p, bins='auto')
         return self.valid_metrics.result()
-
-    def _progress(self, batch_idx):
-        base = '[{}/{} ({:.0f}%)]'
-        if hasattr(self.data_loader, 'n_samples'):
-            current = batch_idx * self.data_loader.batch_size
-            total = self.data_loader.n_samples
-        else:
-            current = batch_idx
-            total = self.len_epoch
-        return base.format(current, total, 100.0 * current / total)

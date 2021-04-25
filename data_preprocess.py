@@ -39,7 +39,7 @@ if __name__ == "__main__":
     args.add_argument("-w", "--image_width", default=512, type=int, help="width of image")
     args.add_argument("-q", "--quality", default=100, type=int, help="quality of image after resize")
     args.add_argument("-k", "--keep_aspect_ratio", default=False, type=bool, help="whether keep original image ratio")
-    args.add_argument("-t", "--task", default="crop_resize", type=str, help="specific task apply on the images")
+    args.add_argument("-t", "--task", default="crop", type=str, help="specific task apply on the images")
     args = args.parse_args()
     # create logger
     logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",

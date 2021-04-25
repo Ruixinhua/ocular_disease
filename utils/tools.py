@@ -1,4 +1,4 @@
-import os
+import argparse
 import json
 from collections import OrderedDict
 from itertools import repeat
@@ -27,7 +27,7 @@ def write_json(content, fname):
 
 
 def inf_loop(data_loader):
-    ''' wrapper function for endless data loader. '''
+    """ wrapper function for endless data loader. """
     for loader in repeat(data_loader):
         yield from loader
 
@@ -57,15 +57,17 @@ class MetricTracker:
         self.reset()
 
     def reset(self):
+        # reset values of data to 0
         for col in self._data.columns:
             self._data[col].values[:] = 0
 
     def update(self, key, value, n=1):
+        # update value
         if self.writer is not None:
             self.writer.add_scalar(key, value)
         self._data.total[key] += value * n
         self._data.counts[key] += n
-        self._data.average[key] = self._data.total[key] / self._data.counts[key]
+        self._data.average[key] = round(self._data.total[key] / self._data.counts[key], 4)
 
     def avg(self, key):
         return self._data.average[key]

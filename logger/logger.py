@@ -1,16 +1,15 @@
 import logging
 import logging.config
-from pathlib import Path
+import os
 
 from utils.tools import read_json
 
 
-def setup_logging(save_dir, log_config='logger/logger_config.json', default_level=logging.INFO):
+def setup_logging(save_dir, log_config="", default_level=logging.INFO):
     """
     Setup logging configuration
     """
-    log_config = Path(log_config)
-    if log_config.is_file():
+    if os.path.isfile(log_config):
         config = read_json(log_config)
         # modify logging paths based on run config
         for _, handler in config['handlers'].items():
@@ -19,5 +18,7 @@ def setup_logging(save_dir, log_config='logger/logger_config.json', default_leve
 
         logging.config.dictConfig(config)
     else:
-        print("Warning: logging configuration file is not found in {}.".format(log_config))
-        logging.basicConfig(level=default_level)
+        # print(save_dir / "info.log")
+        # print("Warning: logging configuration file is not found in {}.".format(log_config))
+        logging.basicConfig(level=default_level, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+                            filename=str(save_dir / "info.log"), force=True)

@@ -32,6 +32,7 @@ class BaseTrainer:
             assert self.mnt_mode in ['min', 'max']
 
             self.mnt_best = inf if self.mnt_mode == 'min' else -inf
+            self.log_best = None
             self.early_stop = cfg_trainer.get('early_stop', inf)
             if self.early_stop <= 0:
                 self.early_stop = inf
@@ -63,11 +64,11 @@ class BaseTrainer:
         for epoch in range(self.start_epoch, self.epochs + 1):
             result = self._train_epoch(epoch)
 
-            # save logged informations into log dict
+            # save logged information into log dict
             log = {'epoch': epoch}
             log.update(result)
 
-            # print logged informations to the screen
+            # print logged information to the screen
             for key, value in log.items():
                 self.logger.info('    {:15s}: {}'.format(str(key), value))
 
@@ -86,8 +87,10 @@ class BaseTrainer:
 
                 if improved:
                     self.mnt_best = log[self.mnt_metric]
+                    self.log_best = log
                     not_improved_count = 0
                     best = True
+                    self._save_checkpoint(epoch, log, save_best=best)
                     self.logger.debug(f"Current best result: {self.mnt_best}")
                 else:
                     not_improved_count += 1
@@ -95,12 +98,16 @@ class BaseTrainer:
                 if not_improved_count > self.early_stop:
                     self.logger.info("Validation performance didn\'t improve for {} epochs. "
                                      "Training stops.".format(self.early_stop))
+                    self.logger.info(f"The best performance is:")
+                    # print logged information to the screen
+                    for key, value in self.log_best.items():
+                        self.logger.info('    {:15s}: {}'.format(str(key), value))
                     break
 
             if epoch % self.save_period == 0:
-                self._save_checkpoint(epoch, save_best=best)
+                self._save_checkpoint(epoch, log, save_best=best)
 
-    def _save_checkpoint(self, epoch, save_best=False):
+    def _save_checkpoint(self, epoch, log=None, save_best=False):
         """
         Saving checkpoints
 
@@ -115,7 +122,8 @@ class BaseTrainer:
             'state_dict': self.model.state_dict(),
             'optimizer': self.optimizer.state_dict(),
             'monitor_best': self.mnt_best,
-            'config': self.config
+            'config': self.config,
+            'log': log
         }
         filename = str(self.checkpoint_dir / 'checkpoint-epoch{}.pth'.format(epoch))
         torch.save(state, filename)

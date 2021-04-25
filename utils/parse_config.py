@@ -1,5 +1,6 @@
 import logging
 import os
+import shutil
 from datetime import datetime
 from functools import reduce, partial
 from operator import getitem
@@ -34,6 +35,12 @@ class ConfigParser:
 
         # make directory for saving checkpoints and log.
         exist_ok = run_id == ''
+        if not exist_ok:
+            # remove old directory
+            if os.path.exists(self.save_dir):
+                shutil.rmtree(self.save_dir)
+            if os.path.exists(self.log_dir):
+                shutil.rmtree(self.log_dir)
         self.save_dir.mkdir(parents=True, exist_ok=exist_ok)
         self.log_dir.mkdir(parents=True, exist_ok=exist_ok)
 
@@ -49,7 +56,7 @@ class ConfigParser:
         }
 
     @classmethod
-    def from_args(cls, args, options=''):
+    def from_args(cls, args, options: list, more_opt=None, run_id=None):
         """
         Initialize this class from some cli arguments. Used in train, test.
         """
@@ -62,20 +69,29 @@ class ConfigParser:
             os.environ["CUDA_VISIBLE_DEVICES"] = args.device
         if args.resume is not None:
             resume = Path(args.resume)
-            cfg_fname = resume.parent / 'config.json'
+            cfg_name = resume.parent / 'config.json'
         else:
             msg_no_cfg = "Configuration file need to be specified. Add '-c config.json', for example."
             assert args.config is not None, msg_no_cfg
             resume = None
-            cfg_fname = Path(args.config)
+            cfg_name = Path(args.config)
 
-        config = read_json(cfg_fname)
+        config = read_json(cfg_name)
         if args.config and resume:
             # update new config for fine-tuning
             config.update(read_json(args.config))
+        # add extra configuration for model
+        if hasattr(args, "pretrained_model"):
+            if args.pretrained_model:
+                config["arch"]["args"]["pretrained_model"] = args.pretrained_model
+        if hasattr(args, "freeze_param"):
+            if args.freeze_param:
+                config["arch"]["args"]["freeze_param"] = args.freeze_param
         # parse custom cli options into dictionary
         modification = {opt.target: getattr(args, _get_opt_name(opt.flags)) for opt in options}
-        return cls(config, resume, modification)
+        if more_opt:
+            modification.update(more_opt)
+        return cls(config, resume, modification, run_id=run_id)
 
     def init_obj(self, name, module, *args, **kwargs):
         """

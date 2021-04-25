@@ -1,22 +1,22 @@
 {
-    "name": "ocular_classification",
+    "name": "test",
     "n_gpu": 1,
 
     "arch": {
-        "type": "Resnet",
+        "type": "PretrainedModel",
         "args": {
         }
     },
     "data_loader": {
         "type": "OcularDataloader",
         "args":{
-            "full_df_path": "dataset/full_df.csv",
-            "dataset_path": "dataset/preprocessed_images/",
-            "img_size": 512,
-            "apply_balance": true,
+            "train_df_path": "dataset/train_df_aug.csv",
+            "valid_df_path": "dataset/valid_df.csv",
+            "dataset_path": "dataset/train_aug/",
+            "img_size": 224,
+            "down_sampling": false,
             "batch_size": 32,
             "shuffle": true,
-            "validation_split": 0.2,
             "num_workers": 0
         }
     },
@@ -47,7 +47,7 @@
         "verbosity": 2,
         
         "monitor": "max val_auc",
-        "early_stop": 10,
+        "early_stop": 5,
 
         "tensorboard": true
     }
