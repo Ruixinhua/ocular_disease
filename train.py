@@ -57,7 +57,7 @@ def main(config):
 
 if __name__ == "__main__":
     args = argparse.ArgumentParser(description="ODIR training process")
-    args.add_argument("-c", "--config", default="config.json", type=str,
+    args.add_argument("-c", "--config", default="pretrained_model.json", type=str,
                       help="config file path (default: None)")
     args.add_argument("-r", "--resume", default=None, type=str,
                       help="path to latest checkpoint (default: None)")
