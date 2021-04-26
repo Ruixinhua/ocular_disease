@@ -144,7 +144,12 @@ def evaluate():
         columns=["model", "val_auc", "val_acc", "test_auc", "test_acc", "parameters", "FLOPS", "Time Consuming"])
     for model_name in all_models:
         log_dir = os.path.join("saved/models", model_name)
+        if not os.path.exists(log_dir):
+            continue
         ckpt_path = os.path.join(log_dir, os.listdir(log_dir)[-1], "model_best.pth")
+        if not os.path.exists(ckpt_path):
+            print(f"{ckpt_path} is not exist, please run experiment first")
+            continue
         checkpoint = torch.load(ckpt_path, map_location=torch.device('cpu'))
         log_dic = checkpoint["log"]
 
